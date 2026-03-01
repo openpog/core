@@ -30,12 +30,13 @@ Core is designed to:
 
 OpenPOG Core v1 includes:
 
-- authority-scoped discovery via `/.well-known/api-catalog` using an RFC 9727-compatible API catalog,
-- one mandatory resolve operation (`GET /v1/resolve?url=...`) with strict input validation,
+- authority-scoped discovery via `/.well-known/api-catalog` using an RFC 9727-compatible API catalog (`GET` discovery content is authoritative),
+- one mandatory resolve operation (`GET {resolve_endpoint}?url=...`) discovered via `urn:openpog:rel:resolve`,
+- deterministic discovery entry selection by authority-root anchor matching,
 - resolve input boundary: exactly one absolute URI in `url`, with only `http`/`https` schemes supported by Core,
-- a canonical publication record model with gateway-scoped `canonical_url` identity (`canonical_url`, `status`, `representations`, `links`),
+- a canonical publication record model with gateway-scoped `canonical_url` identity, lifecycle `status` (`active`, `gone`, `unknown`), and optional `required_profiles` signaling,
 - typed link pointers for citation, policy, and descriptive context,
-- representation integrity metadata with required `sha-256` support,
+- representation integrity metadata with required `sha-256` support and HTTPS `origin_url`,
 - machine-readable error guidance (`application/problem+json`).
 
 ## What Core Does Not Include
@@ -55,8 +56,8 @@ These concerns are reserved for optional profiles layered on top of Core.
 
 1. Client derives URL authority from the input publication URL.
 2. Client discovers OpenPOG metadata at `https://{authority}/.well-known/api-catalog`.
-3. Client finds `urn:openpog:rel:resolve` and reads the absolute resolve endpoint URL.
-4. Client resolves one absolute HTTP(S) publication URL with `GET /v1/resolve?url={publication_url}`.
+3. Client deterministically selects the discovery entry whose `anchor` matches the authority-root URI `https://{authority}/` and reads its `urn:openpog:rel:resolve` absolute endpoint URL.
+4. Client resolves one absolute HTTP(S) publication URL with `GET {resolve_endpoint}?url={publication_url}`.
 5. Gateway returns one canonical publication record on success.
 6. Client retrieves bytes from a selected `origin_url`.
 7. Client verifies bytes against declared `digests` before trust-sensitive use.
@@ -81,6 +82,7 @@ A conforming client must:
 - send valid resolve requests,
 - process Core publication records,
 - verify representation digests before trust-sensitive use,
+- fail explicitly when any profile URI listed in `required_profiles` is unsupported,
 - fail closed on discovery failures and treat cross-host discovery redirects as untrusted unless explicit local policy allows,
 - treat `206 Partial Content` retrievals as non-verifiable in Core unless a profile defines partial verification,
 - tolerate unknown extension fields.

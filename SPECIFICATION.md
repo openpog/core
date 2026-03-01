@@ -18,7 +18,7 @@ Starting from a public publication URL, a conforming client can:
 - resolve the input URL into one canonical publication record,
 - obtain one or more publisher-controlled representation URLs,
 - inspect typed links for citation, policy, and descriptive context,
-- verify retrieved bytes against publisher-declared integrity digests.
+- verify selected representation data against publisher-declared integrity digests.
 
 OpenPOG Core intentionally standardizes only the minimum interoperability seam. It does not standardize ranking, recommendation, settlement, delegated identity, trust federation, or market structure in the base layer.
 
@@ -129,7 +129,7 @@ The gateway resolves and describes. Publisher-controlled origins deliver represe
 
 ### 3.6 Mandatory integrity before optional audit
 
-Representation digests are required in Core so a client can verify retrieved bytes. Richer audit systems remain optional profile concerns.
+Representation digests are required in Core so a client can verify selected representation data. Richer audit systems remain optional profile concerns.
 
 ### 3.7 Profiles may extend, but not redefine core semantics
 
@@ -200,11 +200,11 @@ A concrete retrievable form of a publication, identified by `origin_url`, `media
 
 ### 5.7 Origin URL
 
-The publisher-controlled URL from which representation bytes are retrieved.
+The publisher-controlled URL from which selected representation data is retrieved.
 
 ### 5.8 Digests
 
-A mapping from digest algorithm keys to base64-encoded values used to verify representation bytes. `sha-256` is mandatory in Core.
+A mapping from digest algorithm keys to base64-encoded values used to verify selected representation data. `sha-256` is mandatory in Core.
 
 ### 5.9 Typed Link
 
@@ -260,7 +260,7 @@ A conforming gateway:
 - MUST implement Core discovery and resolve behavior,
 - MUST enforce Core record constraints,
 - MUST return deterministic results for deterministic inputs,
-- MUST avoid acting as a byte-serving proxy in Core mode.
+- MUST NOT proxy publisher bytes in Core mode.
 
 ### 6.6 Client responsibilities
 
@@ -291,7 +291,7 @@ Core discovery uses the `api-catalog` well-known resource and relation defined f
 
 ### 7.4 Required discovery document contents
 
-At `/.well-known/api-catalog`, a conforming gateway MUST resolve HTTPS `GET` and `HEAD` requests. `GET` responses MUST expose an RFC 9727-compatible API catalog and MUST provide enough information for a client to locate the resolve endpoint. `HEAD` responses MUST include at minimum a `Link` header with relation `api-catalog` as required by RFC 9727, and in addition MUST include a `Link` header with the `urn:openpog:rel:resolve` relation plus a `Link` header with relation `profile` advertising `urn:openpog:core:v1`. [REF-15]
+At `/.well-known/api-catalog`, a conforming gateway MUST resolve HTTPS `GET` and `HEAD` requests. `GET` responses MUST expose an RFC 9727-compatible API catalog and MUST provide enough information for a client to locate the resolve endpoint. `HEAD` responses MUST include at minimum a `Link` header with relation `api-catalog` as required by RFC 9727. `HEAD` responses MAY additionally include advisory OpenPOG `Link` hints (`urn:openpog:rel:resolve` and/or `profile` advertising `urn:openpog:core:v1`), and when such hints are present they MUST include an explicit `anchor` parameter. The `GET` discovery document is authoritative; `HEAD` hints are advisory only. [REF-15]
 
 A conforming OpenPOG discovery document MUST provide:
 
@@ -299,7 +299,14 @@ A conforming OpenPOG discovery document MUST provide:
 - one link relation `profile` in the selected entry that includes `urn:openpog:core:v1`,
 - optional `service-desc` and `service-meta` links for additional documentation. [REF-25]
 
-When multiple linkset entries are present, clients MUST use `anchor` for authority-scoped selection and apply only the single `urn:openpog:rel:resolve` target from the matching entry. The Core profile requirement above applies to that same selected entry.
+A conforming gateway MUST set the `anchor` of its OpenPOG linkset entry to the authority-root form `https://{authority}/` (scheme, lowercase host, optional non-default port, and exactly `/` as the path). Anchors with non-root paths MUST NOT be used for OpenPOG entries.
+
+When multiple linkset entries are present, clients MUST select the applicable entry as follows:
+
+1. Derive `{authority}` from the input publication URL.
+2. Construct the authority-root URI `https://{authority}/` (with lowercase host and default-port normalization applied). Match only entries whose `anchor` equals this authority-root URI by exact string comparison after equivalent normalization.
+3. If exactly one entry matches, use that entry; it MUST contain exactly one `urn:openpog:rel:resolve` target and a `profile` relation including `urn:openpog:core:v1`.
+4. If zero or multiple entries match, discovery fails and clients MUST fail closed per Section 7.8.
 
 Discovery profile signaling in this section is representation-level metadata for the discovery document (or the discovery-document URI when links are explicitly anchored there), and MUST NOT be interpreted as an authority identity claim.
 
@@ -334,15 +341,15 @@ Clients MUST NOT automatically trust cross-host redirects for discovery. A clien
 
 ### 8.1 Overview
 
-Core defines one mandatory business endpoint:
+Core defines one mandatory business operation:
 
-`GET /v1/resolve?url={publication_url}`
+`GET {resolve_endpoint}?url={publication_url}`
 
-The absolute endpoint URL is obtained from discovery (`urn:openpog:rel:resolve`).
+`resolve_endpoint` is discovered via `urn:openpog:rel:resolve`; `/v1/resolve` is an example deployment path, not a fixed Core requirement.
 
-### 8.2 Required endpoint: `GET /v1/resolve?url={publication_url}`
+### 8.2 Required operation: `GET {resolve_endpoint}?url={publication_url}`
 
-A conforming gateway MUST expose one resolve endpoint that accepts a single `url` query parameter and returns exactly one publication record on success.
+A conforming gateway MUST expose one discovered resolve endpoint (`urn:openpog:rel:resolve`) that accepts a single `url` query parameter and returns exactly one publication record on success. `/v1/resolve` is a common example, not a required fixed path.
 
 ### 8.3 Request format
 
@@ -350,7 +357,7 @@ Request requirements:
 
 - Query parameter `url` is REQUIRED.
 - `url` MUST carry exactly one absolute URI as its percent-encoded textual value. [REF-03]
-- Core resolve supports only `http` and `https` URI schemes; other absolute schemes MUST be rejected with `422` as defined in Section 8.6.
+- Core resolve supports only `http` and `https` URI schemes; other absolute schemes MUST be rejected with `400` as defined in Section 8.6.
 - A request with multiple `url` parameters MUST be rejected as invalid.
 - Clients SHOULD send `Accept: application/json`.
 
@@ -362,30 +369,30 @@ On normal success, gateway MUST return:
 - `Content-Type: application/json`,
 - a valid Core Publication Record.
 
+Gateway SHOULD include an `ETag` header on `200` resolve responses to enable conditional revalidation via `If-None-Match`. [REF-04] [REF-13]
+
 If conditional headers are satisfied, gateway MUST return `304 Not Modified` with no response body.
 
 ### 8.5 Not found behavior
 
-If no matching publication identity exists, gateway MUST return `404 Not Found` and SHOULD return an RFC 9457 problem details payload. Known lifecycle states are encoded in `200` publication-record responses (`status="gone"` or `status="unknown"` when such records exist), and Core resolve does not use `410 Gone` to encode lifecycle state. [REF-09]
+If no matching publication identity exists, gateway MUST return `404 Not Found` and SHOULD return an RFC 9457 problem details payload. Known lifecycle states are encoded in `200` publication-record responses (`status="gone"` or `status="unknown"` when such records exist), and Core resolve does not use `410 Gone` to encode lifecycle state. This separates transport outcome from publication lifecycle: HTTP status reports request handling, while lifecycle state is carried by record `status`. [REF-09]
 
 ### 8.6 Validation errors
 
 Gateway MUST return:
 
-- `400 Bad Request` for malformed inputs (missing/invalid `url` parameter),
-- `422 Unprocessable Content` for syntactically valid but unsupported input classes.
+- `400 Bad Request` for all invalid inputs, whether malformed (missing/invalid `url` parameter) or syntactically valid but unsupported (for example an absolute URI with a non-HTTP(S) scheme).
 
-Malformed means request-shape or parse failures (for example missing or duplicate `url`, URL parse failure, or non-absolute URL); `422` applies to inputs that are syntactically valid and absolute but unsupported (for example an absolute URI with a non-HTTP(S) scheme).
+Gateways SHOULD distinguish malformed from unsupported cases in the RFC 9457 problem details `type` URI and `detail` field rather than through separate HTTP status codes. [REF-09]
 
 ### 8.7 Optional headers
 
 Gateway MAY support and clients MAY use standard HTTP headers including:
 
 - `If-None-Match`,
-- `If-Modified-Since`,
 - `Accept`.
 
-Conditional behavior MUST follow HTTP semantics: satisfied validators (for example `If-None-Match` or `If-Modified-Since`) MUST return `304 Not Modified` with no body; otherwise normal success remains `200` with a publication record. [REF-04] [REF-13]
+Validators apply to the entire publication-record representation, including `representations`, `digests`, `links`, `profiles`, and extension members. Conditional behavior MUST follow HTTP semantics: a satisfied `If-None-Match` validator MUST return `304 Not Modified` with no body; if any included value would differ, the gateway MUST return `200` with the updated publication record (not `304`). Profiles MAY define additional conditional request headers such as `If-Modified-Since` when gateways can supply a meaningful `Last-Modified`. [REF-04] [REF-13]
 
 ### 8.8 Method constraints
 
@@ -458,7 +465,8 @@ Core-defined optional fields:
 
 - `id` (gateway-local stable identifier),
 - `updated_at` (RFC 3339 timestamp [REF-11]),
-- `profiles` (array of profile URIs),
+- `profiles` (array of profile URIs advertised for this record),
+- `required_profiles` (array of profile URIs that a client MUST support in order to correctly interpret this record; see Section 15.6),
 - `publisher` (object with optional descriptive metadata).
 
 ### 10.4 Field: `canonical_url`
@@ -469,8 +477,10 @@ Requirements:
 
 - MUST be absolute HTTP(S),
 - MUST be stable for the life of the record,
-- MUST be unique within the gateway among active records, after normalization,
+- MUST be unique within the gateway across all records (`active`, `gone`, and `unknown`), after normalization,
 - MUST NOT be omitted.
+
+Lifecycle changes MUST be expressed as status transitions of the same record and MUST NOT create duplicate records with the same `canonical_url`.
 
 Typed links (including `cite-as` and `canonical`) are citation/discovery metadata and MUST NOT redefine record identity.
 
@@ -602,13 +612,13 @@ For Core publisher-control authority constraints, an `origin_url` is considered 
 - identical to the authority of `canonical_url`,
 - within the same registrable domain as `canonical_url` (i.e., sharing the same public-suffix-plus-one domain as determined by the WHATWG URL Standard and the Public Suffix List). [REF-29] [REF-30]
 
-This same-authority/same-registrable-domain rule is an interoperability hostname policy for Core; it is not cryptographic or legal proof of control.
+This same-authority/same-registrable-domain rule is an interoperability hostname heuristic for Core; it can over-include or under-include real control and is not cryptographic or legal proof of control. Implementations MAY apply stricter local policy.
 
 Delegated origin authorization is out of scope for Core. Any broader delegated-origin trust model MUST be defined by a profile before clients rely on it.
 
 `origin_url` is required to be HTTPS (not HTTP) to ensure representation bytes are delivered over authenticated, encrypted transport, which is a prerequisite for meaningful integrity verification. [REF-04]
 
-Clients MUST treat only the first two cases as conforming unless a profile explicitly defines delegated-origin evaluation.
+Clients MUST treat only the first two cases as Core-conforming baseline unless a profile explicitly defines delegated-origin evaluation.
 
 ### 12.5 Field: `media_type`
 
@@ -780,7 +790,9 @@ Extensions SHOULD be discoverable via:
 If a profile is unknown:
 
 - clients MUST continue Core processing when possible,
-- clients MUST fail explicitly if profile support is required for correctness.
+- clients MUST fail explicitly if the unknown profile URI appears in the record's `required_profiles` array.
+
+The `required_profiles` field provides a machine-readable signal distinguishing profiles that are mandatory for correct interpretation from those that are merely advertised. If `required_profiles` is absent or empty, no profile is mandatory and clients MAY safely apply Core-only processing. Every URI in `required_profiles` MUST also appear in `profiles`. [REF-17]
 
 ## 16. Error Model
 
@@ -794,7 +806,7 @@ Invalid request errors (for example missing `url` or malformed URI) MUST return 
 
 ### 16.3 Unsupported input
 
-Supported syntax but unsupported semantics (for example an absolute non-HTTP(S) URI) MUST return `422`. Gateways SHOULD return problem details.
+Supported syntax but unsupported semantics (for example an absolute non-HTTP(S) URI) MUST return `400`. Gateways SHOULD distinguish this from malformed inputs using distinct RFC 9457 problem details `type` URIs. [REF-09]
 
 ### 16.4 Not found
 
@@ -832,6 +844,16 @@ The `instance` field in these examples uses UUID URN notation as defined in RFC 
 }
 ```
 
+```json
+{
+  "type": "https://openpog.org/problems/unsupported-scheme",
+  "title": "Unsupported URI scheme",
+  "status": 400,
+  "detail": "The supplied URL uses scheme 'ftp', which is not supported. Core resolve accepts only 'http' and 'https'.",
+  "instance": "urn:uuid:a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+}
+```
+
 ## 17. Security Considerations
 
 ### 17.1 No byte proxying in core
@@ -844,7 +866,7 @@ If a client follows redirects during origin retrieval, each redirect hop MUST re
 
 ### 17.3 Origin URL trust boundaries
 
-Clients SHOULD treat `origin_url` and any redirect target as untrusted until transport, authority, and digest verification checks pass. Digest verification MUST be performed against the final response body after redirects.
+Clients SHOULD treat `origin_url` and any redirect target as untrusted until transport, authority, and digest verification checks pass. Digest verification MUST be performed against selected representation data after redirects.
 
 ### 17.4 Digest misuse and mismatch handling
 
@@ -853,6 +875,8 @@ Implementations MUST treat digest mismatches as integrity failures and SHOULD in
 ### 17.5 Metadata integrity assumptions
 
 Core relies on secure transport and trustworthy gateway metadata publication. Digest verification does not compensate for fully compromised metadata channels.
+
+Deployments requiring metadata authenticity beyond digest checks SHOULD use a signing mechanism such as HTTP Message Signatures. [REF-36]
 
 ### 17.6 Abuse, rate control, and operational safeguards
 
@@ -935,7 +959,7 @@ Conforming implementations MUST:
 
 - preserve unknown fields,
 - avoid assuming exhaustive enums for extension-capable fields,
-- fail explicitly when required profile semantics are unavailable.
+- fail explicitly when a profile URI listed in `required_profiles` is unsupported.
 
 ## 20. Profiles Framework
 
@@ -964,7 +988,7 @@ Profile ecosystems SHOULD maintain a public registry documenting:
 - compatibility notes,
 - reference specification location.
 
-Where possible, profile registries SHOULD follow the profile URI registry guidance in RFC 7284. [REF-32]
+Where possible, profile registries SHOULD follow the profile URI registry guidance in RFC 7284 and the IANA Profile URIs Registry. [REF-32] [REF-35]
 
 ## 21. Reserved Optional Profiles (Non-Core)
 
@@ -1146,7 +1170,7 @@ OpenPOG Core v1 reuses the existing `api-catalog` well-known URI and therefore d
 
 ### 24.2 Media type considerations, if needed in a future revision
 
-OpenPOG Core v1 uses existing media types (`application/json`, `application/linkset+json`, `application/problem+json`) and introduces no new media type registrations. [REF-18] [REF-16] [REF-09] [REF-14]
+OpenPOG Core v1 uses existing media types (`application/json`, `application/linkset+json`, `application/problem+json`) and introduces no new media type registrations. Media-type identifiers should align with the IANA Media Types Registry. [REF-18] [REF-16] [REF-09] [REF-14] [REF-34]
 
 ### 24.3 Relation and profile registration guidance
 
@@ -1204,7 +1228,8 @@ These schemas validate the minimal structural shape of Core payloads. They are n
       "properties": {
         "anchor": {
           "type": "string",
-          "format": "uri"
+          "format": "uri",
+          "pattern": "^https://[^/]+/$"
         },
         "urn:openpog:rel:resolve": {
           "allOf": [
@@ -1311,6 +1336,13 @@ These schemas validate the minimal structural shape of Core payloads. They are n
         "format": "uri"
       }
     },
+    "required_profiles": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uri"
+      }
+    },
     "publisher": {
       "type": "object",
       "additionalProperties": true
@@ -1361,7 +1393,7 @@ These schemas validate the minimal structural shape of Core payloads. They are n
         }
       },
       "patternProperties": {
-        "^[a-z0-9_-]+$": {
+        "^[a-z][a-z0-9_.*-]*$": {
           "type": "string",
           "pattern": "^[A-Za-z0-9+/]+={0,2}$"
         }
@@ -1432,7 +1464,7 @@ These schemas validate the minimal structural shape of Core payloads. They are n
         }
       },
       "patternProperties": {
-        "^[a-z0-9_-]+$": {
+        "^[a-z][a-z0-9_.*-]*$": {
           "type": "string",
           "pattern": "^[A-Za-z0-9+/]+={0,2}$"
         }
@@ -1519,7 +1551,7 @@ Compared with broader historical POG drafts, OpenPOG Core v1:
 Open questions for profile work include:
 
 - Should a dedicated OpenPOG relation token for resolve be registered in IANA?
-- Should profile capability negotiation be standardized beyond URI declaration?
+- Should profile capability negotiation be standardized beyond URI declaration and the `required_profiles` mechanism?
 - Should cryptographic metadata signatures be standardized as a profile layer?
 - Should cross-gateway trust and replay protection be standardized in federation profiles?
 
@@ -1558,3 +1590,6 @@ Open questions for profile work include:
 - [REF-31] RFC 8941: https://www.rfc-editor.org/rfc/rfc8941
 - [REF-32] RFC 7284: https://www.rfc-editor.org/rfc/rfc7284
 - [REF-33] RFC 8126: https://www.rfc-editor.org/rfc/rfc8126
+- [REF-34] IANA Media Types Registry: https://www.iana.org/assignments/media-types/media-types.xhtml
+- [REF-35] IANA Profile URIs Registry: https://www.iana.org/assignments/profile-uris/profile-uris.xhtml
+- [REF-36] RFC 9421: https://www.rfc-editor.org/rfc/rfc9421
