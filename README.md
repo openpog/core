@@ -30,7 +30,7 @@ Core is designed to:
 
 OpenPOG Core v1 includes:
 
-- authority-scoped discovery via `/.well-known/api-catalog` using an RFC 9727-compatible API catalog (`GET` discovery content is authoritative),
+- authority-scoped discovery via `/.well-known/api-catalog` using an RFC 9727-structured API catalog with OpenPOG-specific trust narrowings (`GET` discovery content is authoritative),
 - one mandatory resolve operation (`GET {resolve_endpoint}?url=...`) discovered via `urn:openpog:rel:resolve`,
 - deterministic discovery entry selection by authority-root anchor matching,
 - resolve input boundary: exactly one absolute URI in `url`, with only `http`/`https` schemes supported by Core,

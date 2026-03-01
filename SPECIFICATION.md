@@ -289,9 +289,11 @@ Core discovery uses the IETF well-known URI mechanism and therefore inherits its
 
 Core discovery uses the `api-catalog` well-known resource and relation defined for API discovery. [REF-15]
 
+OpenPOG Core deliberately narrows RFC 9727's permissive trust model by requiring same-authority anchor matching (Section 7.4) and rejecting cross-host discovery redirects by default (Section 7.9). RFC 9727 allows catalogs hosted at any URI and permits redirects to other hosts; OpenPOG restricts these as safety constraints. These are OpenPOG-specific narrowings, not requirements of RFC 9727 itself.
+
 ### 7.4 Required discovery document contents
 
-At `/.well-known/api-catalog`, a conforming gateway MUST resolve HTTPS `GET` and `HEAD` requests. `GET` responses MUST expose an RFC 9727-compatible API catalog and MUST provide enough information for a client to locate the resolve endpoint. `HEAD` responses MUST include at minimum a `Link` header with relation `api-catalog` as required by RFC 9727. `HEAD` responses MAY additionally include advisory OpenPOG `Link` hints (`urn:openpog:rel:resolve` and/or `profile` advertising `urn:openpog:core:v1`), and when such hints are present they MUST include an explicit `anchor` parameter. The `GET` discovery document is authoritative; `HEAD` hints are advisory only. [REF-15]
+At `/.well-known/api-catalog`, a conforming gateway MUST resolve HTTPS `GET` and `HEAD` requests. `GET` responses MUST expose an RFC 9727-structured API catalog (subject to the OpenPOG-specific trust narrowings described in Section 7.3) and MUST provide enough information for a client to locate the resolve endpoint. `HEAD` responses MUST include at minimum a `Link` header with relation `api-catalog` as required by RFC 9727. `HEAD` responses MAY additionally include advisory OpenPOG `Link` hints (`urn:openpog:rel:resolve` and/or `profile` advertising `urn:openpog:core:v1`), and when such hints are present they MUST include an explicit `anchor` parameter. The `GET` discovery document is authoritative; `HEAD` hints are advisory only. [REF-15]
 
 A conforming OpenPOG discovery document MUST provide:
 
@@ -425,7 +427,7 @@ Resolution MUST be deterministic. For the same normalized input and stable index
 
 ### 9.4 Exact and normalized matches
 
-Gateway SHOULD first attempt exact stored identity match and then normalized match. If both produce candidates, the gateway MUST return the candidate bound to the canonical normalized identity and MUST NOT produce ambiguous multi-record responses in Core.
+Gateway SHOULD first attempt exact stored identity match and then normalized match. If both produce candidates that resolve to the same record, the gateway returns that record. If exact and normalized matches produce different records, the gateway's index is in violation of the Section 10.4 uniqueness invariant; the gateway MUST resolve or reject the ambiguity and MUST NOT silently choose one candidate or produce ambiguous multi-record responses in Core.
 
 ### 9.5 Unknown resources
 
@@ -554,7 +556,7 @@ Core reserves three state tokens:
 
 ### 11.3 `gone`
 
-`gone` means the publication is intentionally no longer available as a normal active resource. Gateway MAY keep metadata discoverable for historical or citation continuity. When a known record is `gone`, resolve MUST return `200` with `status="gone"`.
+`gone` means the publication is intentionally no longer available as a normal active resource. Gateway MAY keep metadata discoverable for historical or citation continuity. Records with `status="gone"` MAY include representations for archival or citation continuity, but clients MUST NOT treat such representations as currently authoritative active content. When a known record is `gone`, resolve MUST return `200` with `status="gone"`.
 
 ### 11.4 `unknown`
 
@@ -607,18 +609,18 @@ Requirements:
 - MUST be an absolute HTTPS URI,
 - MUST be publisher-controlled.
 
-For Core publisher-control authority constraints, an `origin_url` is considered publisher-controlled only when its authority is either:
+For Core publisher-control authority constraints, an `origin_url` SHOULD be considered publisher-controlled when its authority is either:
 
 - identical to the authority of `canonical_url`,
 - within the same registrable domain as `canonical_url` (i.e., sharing the same public-suffix-plus-one domain as determined by the WHATWG URL Standard and the Public Suffix List). [REF-29] [REF-30]
 
-This same-authority/same-registrable-domain rule is an interoperability hostname heuristic for Core; it can over-include or under-include real control and is not cryptographic or legal proof of control. Implementations MAY apply stricter local policy.
+This same-authority/same-registrable-domain rule is an interoperability hostname heuristic for Core; it can over-include or under-include real control and is not cryptographic or legal proof of control. Gateways that accept `origin_url` values outside the registrable domain MUST still ensure all origin URLs are HTTPS and SHOULD document their trust policy. Implementations MAY apply stricter local policy.
 
 Delegated origin authorization is out of scope for Core. Any broader delegated-origin trust model MUST be defined by a profile before clients rely on it.
 
 `origin_url` is required to be HTTPS (not HTTP) to ensure representation bytes are delivered over authenticated, encrypted transport, which is a prerequisite for meaningful integrity verification. [REF-04]
 
-Clients MUST treat only the first two cases as Core-conforming baseline unless a profile explicitly defines delegated-origin evaluation.
+Clients SHOULD treat the first two cases as the Core-conforming baseline and SHOULD require explicit profile or local policy justification before accepting delegated-origin URLs outside the registrable domain.
 
 ### 12.5 Field: `media_type`
 
@@ -683,7 +685,7 @@ Digest requirements:
 - member names MUST be valid algorithm keys from the HTTP Digest Fields registry,
 - gateways and clients MUST support `sha-256`,
 - each member value MUST be RFC 4648 base64 encoding of raw digest bytes,
-- `digests` is a JSON member mapping in Core (not an RFC 8941 Structured Field wire serialization), but algorithm identifiers and digest semantics SHOULD align with HTTP Digest Fields terminology. [REF-19] [REF-31] [REF-12] [REF-26]
+- `digests` is a JSON member mapping in Core (not an RFC 9651 Structured Field wire serialization), but algorithm identifiers and digest semantics SHOULD align with HTTP Digest Fields terminology. [REF-19] [REF-31] [REF-12] [REF-26]
 
 ### 13.3 Client verification procedure
 
@@ -763,7 +765,7 @@ Core links are discoverability pointers. They do not, by themselves, adjudicate 
 
 ### 15.1 JSON as the base encoding
 
-Core request and response payloads use JSON encoded as UTF-8. [REF-18]
+Core JSON documents and response payloads use JSON encoded as UTF-8. [REF-18]
 
 ### 15.2 JSON Schema requirement
 
@@ -1587,7 +1589,7 @@ Open questions for profile work include:
 - [REF-28] Semantic Versioning 2.0.0 (informative): https://semver.org/
 - [REF-29] WHATWG URL Standard (registrable domain): https://url.spec.whatwg.org/#host-registrable-domain
 - [REF-30] Mozilla Public Suffix List: https://publicsuffix.org/list/public_suffix_list.dat
-- [REF-31] RFC 8941: https://www.rfc-editor.org/rfc/rfc8941
+- [REF-31] RFC 9651: https://www.rfc-editor.org/rfc/rfc9651
 - [REF-32] RFC 7284: https://www.rfc-editor.org/rfc/rfc7284
 - [REF-33] RFC 8126: https://www.rfc-editor.org/rfc/rfc8126
 - [REF-34] IANA Media Types Registry: https://www.iana.org/assignments/media-types/media-types.xhtml
