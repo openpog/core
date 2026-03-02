@@ -269,7 +269,7 @@ A conforming client:
 - MUST perform discovery before assuming endpoint locations,
 - MUST send valid resolution inputs,
 - MUST verify representation digests before trust-sensitive use,
-- MUST treat unknown extension fields as non-fatal unless required by profile.
+- MUST treat unknown extension fields as non-fatal unless an extension identified in the record's `critical` array defines stricter processing.
 
 ## 7. Discovery
 
@@ -509,7 +509,7 @@ Relation and link syntax requirements follow Web Linking and IANA relation regis
 
 ### 10.8 Unknown field tolerance
 
-Clients MUST ignore unknown top-level fields and unknown link object members unless a required profile mandates stricter behavior.
+Clients MUST ignore unknown top-level fields and unknown link object members unless an extension identified in the record's `critical` array defines stricter processing.
 
 ### 10.9 Record example
 
@@ -643,11 +643,8 @@ Requirements are defined in Section 13.
 Core optional representation metadata:
 
 - `language` (BCP 47/RFC 5646 tag),
-- `content_length` (non-negative integer octet count of the complete representation byte sequence used for Section 13 verification),
 - `last_modified` (RFC 3339 timestamp [REF-11]),
 - `profiles` (array of profile URIs).
-
-If present, `content_length` MUST exactly match that complete representation octet count.
 
 ### 12.8 Representation selection by client
 
@@ -668,7 +665,6 @@ Client representation selection is client policy. A client SHOULD:
     "sha-256": "c1u7xQ9mUQGg4n8qvJv+za0v7C3acPjzQkDboSWvxfo="
   },
   "language": "en",
-  "content_length": 582123,
   "last_modified": "2026-03-01T12:00:00Z"
 }
 ```
@@ -798,6 +794,8 @@ Processing rules:
 - clients MUST fail explicitly if any URI in `critical` is unsupported,
 - every URI in `critical` MUST also appear in `profiles`,
 - if `critical` is absent or empty, no extension is mandatory and clients MAY safely apply Core-only processing.
+
+An extension identifier is unsupported unless the implementation both recognizes that identifier and applies all normative processing rules it requires. Recognition alone without correct processing does not constitute support.
 
 ## 16. Error Model
 
@@ -1478,10 +1476,6 @@ These schemas validate the minimal structural shape of Core payloads. They are n
     },
     "language": {
       "type": "string"
-    },
-    "content_length": {
-      "type": "integer",
-      "minimum": 0
     },
     "last_modified": {
       "type": "string",
