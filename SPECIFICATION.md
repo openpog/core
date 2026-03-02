@@ -103,7 +103,7 @@ A conforming implementation:
 - MUST tolerate unknown object members,
 - MUST fail explicitly when required semantics are unsupported,
 - MUST NOT reinterpret known Core fields with incompatible meaning,
-- SHOULD preserve additive forward compatibility by ignoring unknown profile-specific fields unless profile processing is mandatory.
+- SHOULD preserve additive forward compatibility by ignoring unknown extension-specific fields unless an extension identified in the record's `critical` array defines stricter processing.
 
 ## 3. Core Design Principles
 
@@ -644,7 +644,7 @@ Core optional representation metadata:
 
 - `language` (BCP 47/RFC 5646 tag),
 - `last_modified` (RFC 3339 timestamp [REF-11]),
-- `profiles` (array of profile URIs).
+- `profiles` (array of profile URIs; descriptive only in Core and not part of `critical` processing unless a future profile explicitly defines that behavior).
 
 ### 12.8 Representation selection by client
 
