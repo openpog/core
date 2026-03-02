@@ -105,6 +105,15 @@ A conforming implementation:
 - MUST NOT reinterpret known Core fields with incompatible meaning,
 - SHOULD preserve additive forward compatibility by ignoring unknown extension-specific fields unless an extension identified in the record's `critical` array defines stricter processing.
 
+### 2.5 Disclaimer (Non-Normative)
+
+This specification defines interoperability and wire behavior. It does not define or adjudicate legal rights, licensing permissions, or regulatory obligations.
+
+- OpenPOG Core does not grant rights to access, reproduce, redistribute, or otherwise use content.
+- Publisher terms, contracts, and applicable law remain authoritative for content access and use.
+- Implementers are responsible for legal compliance, attribution handling, and policy enforcement in their deployments.
+- This document is currently Draft status and may change based on implementation and interoperability feedback.
+
 ## 3. Core Design Principles
 
 ### 3.1 Stateless bootstrap, not session protocol

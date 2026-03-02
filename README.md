@@ -26,6 +26,23 @@ Core is designed to:
 - lower bilateral integration cost across publishers and consumers,
 - provide a stable base for optional profiles.
 
+## Why This Matters
+
+OpenPOG Core is an open standard built to improve the experience for end users.
+
+- For consumers: AI answers can point to real, checkable sources, with fewer dead links and less confusion about where information came from.
+- For publishers: content stays under publisher control while becoming easier to serve across many AI products without custom integrations each time, creating stronger attribution, wider qualified reach, and clearer paths to subscriptions, licensing, and partnerships.
+- For AI assistants and agents: answers backed by clear publisher sources build user trust, reduce low-confidence responses, and turn stronger answer quality into repeat use, deeper engagement, and better retention.
+
+## Disclaimer
+
+OpenPOG Core is a technical interoperability standard, not legal advice.
+
+- It does not grant rights to access, reproduce, or redistribute content.
+- It does not replace publisher terms, licensing agreements, paywalls, or applicable law.
+- Publishers, AI product teams, and other implementers remain responsible for permissions, attribution, and legal compliance.
+- This version is Draft and may evolve through implementation and interoperability feedback.
+
 ## What Core Includes
 
 OpenPOG Core v1 includes:
