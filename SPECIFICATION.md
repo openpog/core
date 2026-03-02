@@ -361,6 +361,7 @@ Request requirements:
 - `url` MUST carry exactly one absolute URI as its percent-encoded textual value. [REF-03]
 - Core resolve supports only `http` and `https` URI schemes; other absolute schemes MUST be rejected with `400` as defined in Section 8.6.
 - A request with multiple `url` parameters MUST be rejected as invalid.
+- Gateways MUST ignore unknown query parameters beyond `url`; unknown parameters MUST NOT alter resolve behavior.
 - Clients SHOULD send `Accept: application/json`.
 
 ### 8.4 Success response
@@ -468,7 +469,7 @@ Core-defined optional fields:
 - `id` (gateway-local stable identifier),
 - `updated_at` (RFC 3339 timestamp [REF-11]),
 - `profiles` (array of profile URIs advertised for this record),
-- `required_profiles` (array of profile URIs that a client MUST support in order to correctly interpret this record; see Section 15.6),
+- `critical` (array of extension identifiers that are mandatory for safe processing; see Section 15.6),
 - `publisher` (object with optional descriptive metadata).
 
 ### 10.4 Field: `canonical_url`
@@ -573,7 +574,7 @@ Recommended transitions:
 
 ### 11.6 Backward-compatible state extension rules
 
-Profiles MAY define additional states only as URI-form identifiers. Clients that do not understand an extension state MUST treat it as semantically equivalent to `unknown` for safety.
+Profiles MAY define additional states only as URI-form identifiers. Clients that do not understand an extension state MUST treat it as semantically equivalent to `unknown` for safety. However, if the extension state is defined by a profile listed in the record's `critical` field, the `critical` processing rule in Section 15.6 takes precedence and the client MUST fail explicitly rather than downgrading to `unknown`.
 
 ## 12. Representation Model
 
@@ -691,14 +692,14 @@ Digest requirements:
 
 For each selected representation, the client MUST:
 
-1. Retrieve the complete representation octet sequence from `origin_url`.
+1. Retrieve the complete selected representation data from `origin_url` as defined by RFC 9530 (the representation data of the selected representation, after any content coding has been decoded). [REF-19]
 2. Select a supported digest algorithm from `digests` (at minimum `sha-256`).
 3. Compute the digest using that algorithm.
 4. Base64-encode the computed bytes.
 5. Compare against the declared `digests` entry for that algorithm.
 6. Treat the representation as valid only on exact match.
 
-Core verification is defined over the complete representation octet sequence; `206 Partial Content` responses are non-verifiable in Core unless a profile defines partial-verification semantics.
+Core verification is defined over the complete selected representation data as specified by RFC 9530; clients MUST decode any content coding (such as `gzip` or `br`) before computing the digest. `206 Partial Content` responses are non-verifiable in Core unless a profile defines partial-verification semantics. [REF-19]
 
 ### 13.4 Verification failure handling
 
@@ -787,14 +788,16 @@ Extensions SHOULD be discoverable via:
 - `Link: <profile-uri>; rel="profile"` headers,
 - optional capability documents referenced from discovery.
 
-### 15.6 Unknown profile behavior
+### 15.6 Unknown profile behavior and criticality
 
-If a profile is unknown:
+`profiles` identifies additional OpenPOG profiles applied to the record. `critical` identifies OpenPOG extension identifiers that are mandatory for safe processing. This separation keeps `profile` descriptive in the sense of RFC 6906 (a profile adds constraints and conventions without changing base media-type semantics), while `critical` is an OpenPOG-specific processing rule that signals must-understand extensions, similar to the `crit` header parameter in JWS (RFC 7515). [REF-17] [REF-37]
 
-- clients MUST continue Core processing when possible,
-- clients MUST fail explicitly if the unknown profile URI appears in the record's `required_profiles` array.
+Processing rules:
 
-The `required_profiles` field provides a machine-readable signal distinguishing profiles that are mandatory for correct interpretation from those that are merely advertised. If `required_profiles` is absent or empty, no profile is mandatory and clients MAY safely apply Core-only processing. Every URI in `required_profiles` MUST also appear in `profiles`. [REF-17]
+- clients MAY ignore unknown URIs that appear only in `profiles`,
+- clients MUST fail explicitly if any URI in `critical` is unsupported,
+- every URI in `critical` MUST also appear in `profiles`,
+- if `critical` is absent or empty, no extension is mandatory and clients MAY safely apply Core-only processing.
 
 ## 16. Error Model
 
@@ -961,7 +964,7 @@ Conforming implementations MUST:
 
 - preserve unknown fields,
 - avoid assuming exhaustive enums for extension-capable fields,
-- fail explicitly when a profile URI listed in `required_profiles` is unsupported.
+- fail explicitly when an extension identifier listed in `critical` is unsupported.
 
 ## 20. Profiles Framework
 
@@ -1338,7 +1341,7 @@ These schemas validate the minimal structural shape of Core payloads. They are n
         "format": "uri"
       }
     },
-    "required_profiles": {
+    "critical": {
       "type": "array",
       "items": {
         "type": "string",
@@ -1553,7 +1556,7 @@ Compared with broader historical POG drafts, OpenPOG Core v1:
 Open questions for profile work include:
 
 - Should a dedicated OpenPOG relation token for resolve be registered in IANA?
-- Should profile capability negotiation be standardized beyond URI declaration and the `required_profiles` mechanism?
+- Should profile capability negotiation be standardized beyond URI declaration and the `critical` mechanism?
 - Should cryptographic metadata signatures be standardized as a profile layer?
 - Should cross-gateway trust and replay protection be standardized in federation profiles?
 
@@ -1595,3 +1598,4 @@ Open questions for profile work include:
 - [REF-34] IANA Media Types Registry: https://www.iana.org/assignments/media-types/media-types.xhtml
 - [REF-35] IANA Profile URIs Registry: https://www.iana.org/assignments/profile-uris/profile-uris.xhtml
 - [REF-36] RFC 9421: https://www.rfc-editor.org/rfc/rfc9421
+- [REF-37] RFC 7515: https://www.rfc-editor.org/rfc/rfc7515
