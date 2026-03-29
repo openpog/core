@@ -672,6 +672,8 @@ Requirements:
 
 For Core publisher-control authority constraints, an `origin_url` MUST be considered publisher-controlled only when its authority is either identical to the authority of `canonical_url` or explicitly listed in the authority's `allowed_origin_authorities` capability metadata.
 
+A gateway that publishes any representation whose `origin_url` authority differs from the `canonical_url` authority MUST also publish and reference via `service-meta` a capability document whose `allowed_origin_authorities` lists every delegated delivery authority it uses.
+
 The same-authority case is the Core baseline. A non-empty `allowed_origin_authorities` array is exhaustive for delegated-origin validation under that discovery authority: once published, publishers MUST include all intended delegated delivery origins in the allowlist before publishing it. Clients MUST NOT treat same-registrable-domain proximity as sufficient publisher-control evidence. Implementations MAY apply stricter local policy.
 
 Delegated origin authorization is out of scope for Core. Any broader delegated-origin trust model MUST be defined by a profile before clients rely on it.
@@ -878,7 +880,7 @@ Core errors MUST be explicit, machine-readable, and conservative in what they di
 
 ### 16.2 Invalid request
 
-Invalid request errors (for example missing `url`, malformed URI, or malformed POST JSON body) MUST return `400` and MUST return RFC 9457 problem details when a body is present. POST requests with an unsupported media type MUST return `415 Unsupported Media Type` and MUST return RFC 9457 problem details when a body is present.
+Invalid request errors (for example missing `url`, malformed URI, or malformed POST JSON body) MUST return `400` and MUST include RFC 9457 problem details in the response body. POST requests with an unsupported media type MUST return `415 Unsupported Media Type` and MUST include RFC 9457 problem details in the response body.
 
 ### 16.3 Unsupported input
 
@@ -1052,7 +1054,8 @@ A conforming Core Client implementation MUST:
 - send valid resolve requests per Section 8,
 - process Core publication records per Sections 10-12,
 - verify representation digests as defined in Section 13 for any retrieved representation and in all cases before trust-sensitive use,
-- fail closed on discovery failures and MUST reject cross-host discovery redirects unless explicit local policy allows,
+- fail closed on discovery failures,
+- reject cross-host discovery redirects unless explicit local policy allows,
 - treat `206 Partial Content` retrievals as non-verifiable in Core unless a profile defines partial-verification semantics,
 - tolerate unknown extension fields as defined in Sections 2.4 and 10.8.
 
